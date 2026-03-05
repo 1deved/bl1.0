@@ -1127,7 +1127,7 @@ footer {
 // ============================================================
 // CONFIGURACIÓN - CAMBIA ESTO
 // ============================================================
-const API_URL = "https://script.google.com/macros/s/AKfycbxG2ov5qDA2aJD0-yljSJzJTz6S4Ar6z53uD8PQpdRSvcB6f2iGh1yBRZ3FpeKDQ0sjHg/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbw-Y8rzWLRHkNknWNtMlJ_S4iucNbK6iJYusIt7BcuQW6L8W6L36lsd3cudMZzno3Kj/exec"; 
 // Ejemplo: "https://script.google.com/macros/s/AKfyc.../exec"
 
 const ADMIN_PASS = "beautylau2024"; // Igual que en Code.gs
@@ -1148,25 +1148,36 @@ const State = {
 };
 
 // ============================================================
-// API SERVICE
+// API SERVICE — JSONP para evitar CORS con Apps Script
 // ============================================================
 const API = {
   async post(action, payload = {}, adminPassword = '') {
-    // Si no hay URL configurada, usa datos demo
     if (!API_URL || API_URL.includes('TU_URL')) {
       return this.mockResponse(action, payload);
     }
-    try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, payload, adminPassword }),
+    return new Promise((resolve) => {
+      const cbName = 'bl_cb_' + Date.now();
+      const params = new URLSearchParams({
+        action,
+        adminPassword,
+        payload: encodeURIComponent(JSON.stringify(payload)),
+        callback: cbName
       });
-      return await res.json();
-    } catch (e) {
-      console.error('API error:', e);
-      return this.mockResponse(action, payload);
-    }
+      const script = document.createElement('script');
+      script.src = `${API_URL}?${params.toString()}`;
+      window[cbName] = (data) => {
+        resolve(data);
+        delete window[cbName];
+        script.remove();
+      };
+      script.onerror = () => {
+        console.error('JSONP error');
+        resolve(this.mockResponse(action, payload));
+        delete window[cbName];
+        script.remove();
+      };
+      document.head.appendChild(script);
+    });
   },
 
   mockResponse(action, payload) {
